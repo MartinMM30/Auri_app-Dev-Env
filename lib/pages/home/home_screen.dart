@@ -1,17 +1,20 @@
 // lib/pages/home/home_screen.dart
 
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:auri_app/models/reminder_hive.dart';
-import 'package:auri_app/widgets/auri_visual.dart';
-import 'package:auri_app/widgets/weather_display.dart';
-import 'package:auri_app/widgets/outfit_recommendation.dart';
+import 'package:auri_app/services/cleanup_service_v7_hive.dart';
 import 'package:auri_app/services/weather_service.dart';
 import 'package:auri_app/models/weather_model.dart';
+import 'package:auri_app/widgets/auri_slime_placeholder.dart';
+import 'package:auri_app/widgets/weather_display_glass.dart';
+import 'package:auri_app/widgets/outfit_recommendation_glass.dart';
 import 'package:auri_app/routes/app_routes.dart';
-import 'package:auri_app/services/cleanup_service_v7_hive.dart';
+import 'package:auri_app/services/slime_mood_engine.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,24 +29,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final WeatherService _weatherService = WeatherService();
   WeatherModel? _weather;
-
   bool _weatherLoading = true;
   String _weatherError = '';
+
+  SlimeMood? _slimeMood;
 
   List<ReminderHive> _upcoming = [];
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
-  Future<void> loadData() async {
+  Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     _userName = prefs.getString('userName') ?? "Usuario";
     _userCity = prefs.getString('userCity') ?? "";
 
-    if (!mounted) return;
     setState(() {});
 
     await _loadWeather();
@@ -51,53 +54,41 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadWeather() async {
-    if (_userCity.isEmpty) {
+    if (_userCity.trim().isEmpty) {
       _weatherError = "Configura tu ciudad en ajustes.";
       _weatherLoading = false;
-      if (!mounted) return;
       setState(() {});
       return;
     }
 
     try {
       final w = await _weatherService.getWeather(_userCity);
+      final mood = SlimeMoodEngine.fromWeather(w, DateTime.now());
+
       _weather = w;
-      _weatherError = '';
+      _slimeMood = mood;
+      _weatherError = "";
     } catch (_) {
       _weatherError = "Error cargando clima";
     }
 
     _weatherLoading = false;
-    if (!mounted) return;
     setState(() {});
   }
 
-  /// Agrupa recordatorios por "baseTitle" (sin el prefijo "Pronto: ")
-  /// y se queda con el que ocurra primero. Así evitamos que en el HOME
-  /// se vean duplicados tipo:
-  ///   - "Pronto: Pago Netflix"
-  ///   - "Pago Netflix"
-  /// a la vez.
   List<ReminderHive> _dedupForHome(List<ReminderHive> list) {
     final map = <String, ReminderHive>{};
 
     for (final r in list) {
       final baseTitle = r.title.replaceFirst("Pronto: ", "").trim();
-
-      DateTime? date;
-      try {
-        date = DateTime.parse(r.dateIso);
-      } catch (_) {
-        continue;
-      }
+      final date = DateTime.tryParse(r.dateIso);
+      if (date == null) continue;
 
       if (!map.containsKey(baseTitle)) {
         map[baseTitle] = r;
       } else {
         final existing = map[baseTitle]!;
-        final existingDate = DateTime.parse(existing.dateIso);
-
-        // Nos quedamos con el más cercano en el tiempo (el más próximo)
+        final existingDate = DateTime.tryParse(existing.dateIso) ?? date;
         if (date.isBefore(existingDate)) {
           map[baseTitle] = r;
         }
@@ -109,165 +100,349 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadReminders() async {
     final box = Hive.box<ReminderHive>('reminders');
-    final all = box.values.cast<ReminderHive>().toList();
-
     final now = DateTime.now();
 
-    // Limpieza por si algo quedó desactualizado
-    final cleaned = CleanupServiceHiveV7.clean(all, now);
+    final cleaned = CleanupServiceHiveV7.clean(
+      box.values.cast<ReminderHive>().toList(),
+      now,
+    );
 
-    // Ventana de 7 días hacia adelante para el HOME
     final horizon = now.add(const Duration(days: 7));
 
-    final filtered = cleaned.where((r) {
+    final upcoming = cleaned.where((r) {
       final dt = DateTime.tryParse(r.dateIso);
       return dt != null && dt.isAfter(now) && dt.isBefore(horizon);
     }).toList();
 
-    final deduped = _dedupForHome(filtered)
-      ..sort((a, b) {
-        final da = DateTime.parse(a.dateIso);
-        final db = DateTime.parse(b.dateIso);
-        return da.compareTo(db);
-      });
+    final deduped = _dedupForHome(upcoming)
+      ..sort(
+        (a, b) =>
+            DateTime.parse(a.dateIso).compareTo(DateTime.parse(b.dateIso)),
+      );
 
     _upcoming = deduped;
-
-    if (!mounted) return;
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final width = MediaQuery.of(context).size.width;
+    final isNarrow = width < 360;
+
+    final moodLabel = _slimeMood?.label ?? "Auri está atenta a todo 💜";
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text("Auri: Dashboard"),
+        title: const Text("Auri"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () async {
               await Navigator.pushNamed(context, AppRoutes.settings);
-              await loadData();
+              await _loadData();
             },
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Hola, $_userName",
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: cs.primary,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              "Tu asistente Auri tiene tu día bajo control.",
-              style: TextStyle(
-                fontSize: 16,
-                color: cs.onSurface.withOpacity(0.7),
-              ),
-            ),
-
-            const SizedBox(height: 25),
-
-            if (_weatherLoading)
-              const Center(child: CircularProgressIndicator())
-            else if (_weatherError.isNotEmpty)
-              _ErrorCard(message: _weatherError)
-            else if (_weather != null)
-              WeatherDisplay(cityName: _userCity),
-
-            const SizedBox(height: 20),
-
-            if (_weather != null)
-              OutfitRecommendationWidget(
-                temperature: _weather!.temperature,
-                condition: _weather!.condition,
-                onTap: () {},
-              ),
-
-            const SizedBox(height: 25),
-
-            Row(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF16001F), Color(0xFF09000F)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Expanded(
-                  child: Text(
-                    'Próximos Recordatorios',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Text(
+                  "Hola, $_userName 👋",
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    color: cs.primary,
                   ),
                 ),
-                TextButton.icon(
-                  icon: const Icon(Icons.alarm),
-                  label: const Text("Ver Todos"),
-                  onPressed: () {
-                    Navigator.pushNamed(context, AppRoutes.reminders);
-                  },
+                const SizedBox(height: 4),
+                Text(
+                  "Auri está lista para tu día ✨",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface.withOpacity(0.7),
+                  ),
                 ),
+
+                const SizedBox(height: 22),
+
+                Center(
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        width: 160,
+                        height: 160,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 160,
+                              height: 160,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: (_slimeMood?.baseColor ?? cs.primary)
+                                    .withOpacity(0.22),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (_slimeMood?.baseColor ?? cs.primary)
+                                        .withOpacity(0.7),
+                                    blurRadius: 40,
+                                    spreadRadius: 3,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const AuriSlimePlaceholder(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        moodLabel,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: cs.onSurface.withOpacity(0.8),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 26),
+
+                if (_weatherLoading)
+                  const Center(child: CircularProgressIndicator())
+                else if (_weatherError.isNotEmpty)
+                  _ErrorCard(message: _weatherError)
+                else if (_weather != null)
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final useColumn = constraints.maxWidth < 480 || isNarrow;
+                      final w = _weather!;
+
+                      final weatherCard = _GlassCard(
+                        child: WeatherDisplayGlass(
+                          weather: w,
+                          onRefresh: () => _loadWeather(),
+                        ),
+                      );
+
+                      final outfitCard = _GlassCard(
+                        child: OutfitRecommendationGlass(
+                          weather: w,
+                          onTap: () {
+                            Navigator.pushNamed(
+                              context,
+                              AppRoutes.outfitPage,
+                              arguments: {"weather": w},
+                            );
+                          },
+                        ),
+                      );
+
+                      if (useColumn) {
+                        return Column(
+                          children: [
+                            weatherCard,
+                            const SizedBox(height: 14),
+                            outfitCard,
+                          ],
+                        );
+                      } else {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: weatherCard),
+                            const SizedBox(width: 14),
+                            Expanded(child: outfitCard),
+                          ],
+                        );
+                      }
+                    },
+                  ),
+
+                const SizedBox(height: 28),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "Próximos recordatorios",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () =>
+                          Navigator.pushNamed(context, AppRoutes.reminders),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.timer_outlined,
+                            size: 18,
+                            color: cs.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Ver todos",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: cs.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                if (_upcoming.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        "¡No tienes recordatorios próximos! ✨",
+                        style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
+                      ),
+                    ),
+                  )
+                else
+                  Column(
+                    children: _upcoming
+                        .take(4)
+                        .map((r) => _ReminderGlassItem(r: r, cs: cs))
+                        .toList(),
+                  ),
+
+                const SizedBox(height: 32),
               ],
             ),
-
-            if (_upcoming.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(30),
-                child: Center(
-                  child: Text(
-                    "¡No tienes recordatorios pendientes en los próximos días! ✨",
-                    style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
-                  ),
-                ),
-              )
-            else
-              ..._upcoming.map((r) => _ReminderItem(r: r, cs: cs)),
-
-            const SizedBox(height: 40),
-            Center(
-              child: Column(
-                children: [
-                  const SizedBox(width: 100, height: 100, child: AuriVisual()),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Auri está lista para ayudarte.",
-                    style: TextStyle(color: cs.onSurface.withOpacity(0.8)),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _ReminderItem extends StatelessWidget {
-  final ReminderHive r;
-  final ColorScheme cs;
+class _GlassCard extends StatelessWidget {
+  final Widget child;
 
-  const _ReminderItem({required this.r, required this.cs});
+  const _GlassCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final date = DateTime.tryParse(r.dateIso);
-    final formatted = date != null
-        ? "${date.day}/${date.month} "
-              "${date.hour.toString().padLeft(2, '0')}:"
-              "${date.minute.toString().padLeft(2, '0')}"
+    final cs = Theme.of(context).colorScheme;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: cs.primary.withOpacity(0.35), width: 0.8),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _ReminderGlassItem extends StatelessWidget {
+  final ReminderHive r;
+  final ColorScheme cs;
+
+  const _ReminderGlassItem({required this.r, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = DateTime.tryParse(r.dateIso);
+    final formatted = dt != null
+        ? "${dt.day}/${dt.month}   ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}"
         : "Fecha inválida";
 
-    return Card(
-      color: cs.surface.withOpacity(0.1),
-      child: ListTile(
-        leading: const Icon(Icons.alarm, color: Colors.purpleAccent),
-        title: Text(r.title, overflow: TextOverflow.ellipsis),
-        subtitle: Text("Vence: $formatted"),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: cs.primary.withOpacity(0.25)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: cs.primary.withOpacity(0.3),
+                  ),
+                  child: const Icon(Icons.alarm, size: 18, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        r.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        "Vence: $formatted",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -281,14 +456,15 @@ class _ErrorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red),
+        color: Colors.red.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.redAccent),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Colors.red),
+          const Icon(Icons.error_outline, color: Colors.redAccent),
           const SizedBox(width: 10),
           Expanded(child: Text(message)),
         ],

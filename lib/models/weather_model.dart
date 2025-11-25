@@ -3,15 +3,17 @@ import 'package:flutter/material.dart';
 class WeatherModel {
   final String cityName;
   final double temperature;
+  final double feelsLike;
   final String description;
-  final String condition; // Clear, Rain, Clouds, etc.
-  final String iconCode; // API icon
+  final String condition;
+  final String iconCode;
   final double windSpeed;
   final int humidity;
 
   WeatherModel({
     required this.cityName,
     required this.temperature,
+    required this.feelsLike,
     required this.description,
     required this.condition,
     required this.iconCode,
@@ -19,11 +21,11 @@ class WeatherModel {
     required this.humidity,
   });
 
-  /// Parse desde OpenWeatherMap
   factory WeatherModel.fromJson(Map<String, dynamic> json) {
     return WeatherModel(
       cityName: json['name'] ?? '-',
       temperature: (json['main']['temp'] as num).toDouble(),
+      feelsLike: (json['main']['feels_like'] as num).toDouble(),
       description: json['weather'][0]['description'] ?? 'N/A',
       condition: json['weather'][0]['main'] ?? 'Unknown',
       iconCode: json['weather'][0]['icon'] ?? '01d',
@@ -32,10 +34,8 @@ class WeatherModel {
     );
   }
 
-  /// Icono oficial de OWM
   String get iconUrl => "https://openweathermap.org/img/wn/$iconCode@4x.png";
 
-  /// Emoji para UI simple
   String get emoji {
     switch (condition) {
       case 'Clear':
@@ -57,7 +57,6 @@ class WeatherModel {
     }
   }
 
-  /// Color para tarjetas según condición
   Color get moodColor {
     switch (condition) {
       case 'Clear':
@@ -79,7 +78,6 @@ class WeatherModel {
     }
   }
 
-  /// Categoría para el outfit del usuario
   String get outfitCategory {
     if (temperature >= 28) return "hot";
     if (temperature >= 20) return "warm";
@@ -88,7 +86,6 @@ class WeatherModel {
     return "freezing";
   }
 
-  /// Recomendación básica incluida
   String get outfitSuggestion {
     switch (outfitCategory) {
       case "hot":
@@ -104,7 +101,6 @@ class WeatherModel {
     }
   }
 
-  /// Intensidad de la lluvia → útil para animación del slime Auri
   String get rainIntensity {
     if (condition != "Rain" && condition != "Drizzle") return "none";
 

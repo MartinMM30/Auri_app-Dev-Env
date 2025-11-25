@@ -13,6 +13,7 @@ class AppRoutes {
   static const surveyInitial = '/survey/initial';
   static const surveyEdit = '/survey/edit';
   static const reminders = '/reminders';
+  static const outfitPage = '/outfit';
 
   static Map<String, WidgetBuilder> routes = {
     welcome: (_) => const WelcomeScreen(),
