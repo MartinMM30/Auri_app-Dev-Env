@@ -1,132 +1,206 @@
-import 'dart:convert';
-import 'package:auri_app/models/reminder_model.dart';
-import 'package:auri_app/services/notification_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+// lib/services/auto_reminder_service.dart
+// (en tu comentario lo llamaste auto_reminder_service_v7.dart, pero ReminderGeneratorV7
+// ya lo importa como auto_reminder_service.dart, así que mantengo ese nombre)
 
-// NO declaramos 'notificationService' aquí.
-// En su lugar, lo recibiremos en el constructor.
+class AutoReminderServiceV7 {
+  static List<ReminderAuto> generateAll({
+    required MonthlyPayments payments,
+    required BirthdayData birthdays,
+    required ReminderSettings settings,
+    required List<UserTask> tasks,
+    required DateTime now,
+  }) {
+    final list = <ReminderAuto>[];
 
-class AutoReminderService {
-  // <- CAMBIO: Añadido campo para guardar el servicio
-  final NotificationService _notificationService;
+    // 1. Pagos mensuales
+    list.addAll(_generateMonthly(payments, settings.anticipationDays, now));
 
-  // <- CAMBIO: Añadido constructor para recibir el servicio
-  AutoReminderService(this._notificationService);
+    // 2. Cumpleaños
+    list.addAll(_generateBirthdays(birthdays, settings.anticipationDays, now));
 
-  ///
-  /// Lee los datos de la encuesta desde SharedPreferences
-  /// y genera una lista inicial de recordatorios.
-  ///
-  Future<void> generateAutoReminders() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<Reminder> autoReminders = [];
+    // 3. Agenda semanal (Opción C)
+    list.add(_generateWeeklyAgenda(tasks, now));
 
-    // --- 1. Generar Recordatorios de Pagos ---
-    if (prefs.getBool('userWantsPaymentReminders') ?? false) {
-      autoReminders.addAll(_createPaymentReminders(prefs));
-    }
-
-    // --- 2. Generar Recordatorios de Clases y Rutina ---
-    if (prefs.getBool('userHasClasses') ?? false) {
-      final classInfo = prefs.getString('userClassesInfo') ?? '';
-      if (classInfo.isNotEmpty) {
-        // <- CAMBIO: Título más descriptivo
-        autoReminders.add(_createSimpleReminder(title: 'Clases: $classInfo'));
-      }
-    }
-
-    if (prefs.getBool('userHasExams') ?? false) {
-      final examInfo = prefs.getString('userExamsInfo') ?? '';
-      if (examInfo.isNotEmpty) {
-        // <- CAMBIO: Título más descriptivo
-        autoReminders.add(_createSimpleReminder(title: 'Exámenes: $examInfo'));
-      }
-    }
-
-    // --- 3. Generar Recordatorios de Cumpleaños ---
-    final partnerBirthday = prefs.getString('userPartnerBirthday') ?? '';
-    if (partnerBirthday.isNotEmpty) {
-      // <- CAMBIO: Título más descriptivo
-      autoReminders.add(
-        _createSimpleReminder(title: 'Cumpleaños Pareja: $partnerBirthday'),
-      );
-    }
-
-    final familyBirthdays = prefs.getString('userFamilyBirthdays') ?? '';
-    if (familyBirthdays.isNotEmpty) {
-      // <- CAMBIO: Título más descriptivo
-      autoReminders.add(
-        _createSimpleReminder(title: 'Cumpleaños Familia: $familyBirthdays'),
-      );
-    }
-
-    final friendBirthdays = prefs.getString('userFriendBirthdays') ?? '';
-    if (friendBirthdays.isNotEmpty) {
-      // <- CAMBIO: Título más descriptivo
-      autoReminders.add(
-        _createSimpleReminder(title: 'Cumpleaños Amigos: $friendBirthdays'),
-      );
-    }
-
-    // --- 4. Guardar y Programar los Recordatorios ---
-    if (autoReminders.isNotEmpty) {
-      await _saveAndScheduleReminders(autoReminders);
-    }
+    return list;
   }
 
-  /// Función auxiliar para crear recordatorios de pago
-  List<Reminder> _createPaymentReminders(SharedPreferences prefs) {
-    List<Reminder> reminders = [];
-    final payments = {
-      'Pago de Agua': prefs.getString('userWaterPayment'),
-      'Pago de Luz': prefs.getString('userElectricPayment'),
-      'Pago de Internet': prefs.getString('userInternetPayment'),
-      'Pago de Teléfono': prefs.getString('userPhonePayment'),
-      'Pago de Renta/Vivienda': prefs.getString('userRentPayment'),
-      'Pago de Tarjeta de Crédito': prefs.getString('userCreditCardPayment'),
-      'Otros Pagos/Suscripciones': prefs.getString('userOtherPayments'),
+  // -------------------------- PAGOS --------------------------
+  static List<ReminderAuto> _generateMonthly(
+    MonthlyPayments p,
+    int anticipation,
+    DateTime now,
+  ) {
+    final out = <ReminderAuto>[];
+
+    final items = {
+      "Pago agua": p.waterDay,
+      "Pago luz": p.lightDay,
+      "Pago internet": p.internetDay,
+      "Pago teléfono": p.phoneDay,
+      "Pago renta": p.rentDay,
     };
 
-    payments.forEach((title, dateInfo) {
-      if (dateInfo != null && dateInfo.isNotEmpty) {
-        // <- CAMBIO: Combinamos el título y la info
-        reminders.add(
-          _createSimpleReminder(title: '$title (Fecha: $dateInfo)'),
-        );
+    items.forEach((title, day) {
+      if (day <= 0) return;
+
+      final thisMonth = _safeDate(now.year, now.month, day);
+      final nextMonth = _safeDate(
+        now.month == 12 ? now.year + 1 : now.year,
+        now.month == 12 ? 1 : now.month + 1,
+        day,
+      );
+
+      // Este mes
+      if (thisMonth.isAfter(now)) {
+        out.add(ReminderAuto(title, thisMonth, isPayment: true));
+
+        if (anticipation > 0) {
+          final soon = thisMonth.subtract(Duration(days: anticipation));
+          if (soon.isAfter(now)) {
+            out.add(ReminderAuto("Pronto: $title", soon, isPayment: true));
+          }
+        }
+      }
+
+      // Próximo mes
+      if (nextMonth.isAfter(now)) {
+        out.add(ReminderAuto(title, nextMonth, isPayment: true));
+
+        if (anticipation > 0) {
+          final soon = nextMonth.subtract(Duration(days: anticipation));
+          if (soon.isAfter(now)) {
+            out.add(ReminderAuto("Pronto: $title", soon, isPayment: true));
+          }
+        }
       }
     });
-    return reminders;
+
+    return out;
   }
 
-  /// Crea un recordatorio simple con una fecha genérica (ej. 7 días desde hoy).
-  // <- CAMBIO: Eliminado el parámetro 'description'
-  Reminder _createSimpleReminder({required String title}) {
-    final reminderTime = DateTime.now().add(const Duration(days: 7));
+  // -------------------------- CUMPLEAÑOS --------------------------
+  static List<ReminderAuto> _generateBirthdays(
+    BirthdayData b,
+    int anticipation,
+    DateTime now,
+  ) {
+    final out = <ReminderAuto>[];
 
-    return Reminder(
-      id: DateTime.now().millisecondsSinceEpoch.toString(), // ID único
-      title: title, // La descripción ahora es parte del título
-      dateTime: reminderTime,
-      isCompleted: false,
-      // <- CAMBIO: Eliminada la línea 'description: description'
-    );
+    final data = {
+      "Cumpleaños: Usuario": b.userBirthday,
+      "Cumpleaños: Pareja": b.partnerBirthday,
+    };
+
+    data.forEach((title, date) {
+      if (date == null) return;
+
+      final next = _nextAnnual(date, now);
+      out.add(ReminderAuto(title, next, isBirthday: true));
+
+      if (anticipation > 0) {
+        final soon = next.subtract(Duration(days: anticipation));
+        if (soon.isAfter(now)) {
+          out.add(ReminderAuto("Pronto: $title", soon, isBirthday: true));
+        }
+      }
+    });
+
+    return out;
   }
 
-  /// Guarda la lista de recordatorios en SharedPreferences y
-  /// le pide al NotificationService que programe las notificaciones.
-  Future<void> _saveAndScheduleReminders(List<Reminder> reminders) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final List<Map<String, dynamic>> jsonList = reminders
-        .map((r) => r.toJson())
-        .toList();
-    //await prefs.setString('reminders', json.encode(jsonList));
-
-    // Volvemos a programar todas las notificaciones
-    // <- CAMBIO: Usamos la instancia inyectada '_notificationService'
-    await _notificationService.cancelAllNotifications();
-    for (var reminder in reminders) {
-      await _notificationService.scheduleReminderNotification(reminder);
+  // -------------------------- AGENDA SEMANAL --------------------------
+  static ReminderAuto _generateWeeklyAgenda(
+    List<UserTask> tasks,
+    DateTime now,
+  ) {
+    if (tasks.isEmpty) {
+      final next = _nextWeekday(now, DateTime.monday, hour: 8);
+      return ReminderAuto("Revisión semanal automática", next);
     }
+
+    tasks.sort((a, b) => a.date.compareTo(b.date));
+
+    return ReminderAuto("Revisión semanal automática", tasks.first.date);
   }
+
+  // -------------------------- HELPERS --------------------------
+  static DateTime _nextAnnual(DateTime birth, DateTime now) {
+    final thisYear = DateTime(now.year, birth.month, birth.day, 9);
+    if (thisYear.isAfter(now)) return thisYear;
+
+    return DateTime(now.year + 1, birth.month, birth.day, 9);
+  }
+
+  static DateTime _nextWeekday(
+    DateTime from,
+    int weekday, {
+    int hour = 9,
+    int minute = 0,
+  }) {
+    var diff = (weekday - from.weekday) % 7;
+    if (diff == 0) diff = 7;
+    return DateTime(from.year, from.month, from.day + diff, hour, minute);
+  }
+
+  static DateTime _safeDate(int year, int month, int day) {
+    final max = DateTime(year, month + 1, 0).day;
+    return DateTime(year, month, day > max ? max : day, 9);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// MODELOS (tal como los tenías, los dejo igual)
+// ---------------------------------------------------------------------------
+
+class ReminderAuto {
+  final String title;
+  final DateTime date;
+  final bool isPayment;
+  final bool isBirthday;
+
+  ReminderAuto(
+    this.title,
+    this.date, {
+    this.isPayment = false,
+    this.isBirthday = false,
+  });
+}
+
+class MonthlyPayments {
+  final int waterDay, lightDay, internetDay, phoneDay, rentDay;
+
+  MonthlyPayments({
+    required this.waterDay,
+    required this.lightDay,
+    required this.internetDay,
+    required this.phoneDay,
+    required this.rentDay,
+  });
+
+  factory MonthlyPayments.empty() => MonthlyPayments(
+    waterDay: 0,
+    lightDay: 0,
+    internetDay: 0,
+    phoneDay: 0,
+    rentDay: 0,
+  );
+}
+
+class BirthdayData {
+  final DateTime? userBirthday;
+  final DateTime? partnerBirthday;
+
+  BirthdayData({required this.userBirthday, required this.partnerBirthday});
+}
+
+class ReminderSettings {
+  final int anticipationDays;
+
+  ReminderSettings({required this.anticipationDays});
+}
+
+class UserTask {
+  final DateTime date;
+
+  UserTask(this.date);
 }

@@ -42,17 +42,17 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyDrQY1844KgyHEw2lkGV4im5PXa96aL1TY',
-    appId: '1:415033030230:web:b0d7f226e56d9b4d70edf7',
+    appId: '1:415033030230:web:4d87c1a04d50549070edf7',
     messagingSenderId: '415033030230',
     projectId: 'auri-app-77770',
     authDomain: 'auri-app-77770.firebaseapp.com',
     storageBucket: 'auri-app-77770.firebasestorage.app',
-    measurementId: 'G-1HSWGGKW87',
+    measurementId: 'G-BMB8KYZ1S3',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyABcoK9k_VCKj7AuthPcgjyS998q-_3xD0',
-    appId: '1:415033030230:android:06b6ad89f054ef9a70edf7',
+    appId: '1:415033030230:android:125132cb882b6e2570edf7',
     messagingSenderId: '415033030230',
     projectId: 'auri-app-77770',
     storageBucket: 'auri-app-77770.firebasestorage.app',
@@ -60,29 +60,30 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyAwyTUJeXllau8XNe5t3CCwa4AwQrRemPc',
-    appId: '1:415033030230:ios:d56aaa86ea7fc89a70edf7',
+    appId: '1:415033030230:ios:5e5559ee2bcc663670edf7',
     messagingSenderId: '415033030230',
     projectId: 'auri-app-77770',
     storageBucket: 'auri-app-77770.firebasestorage.app',
-    iosBundleId: 'com.example.auriApp',
+    iosBundleId: 'com.ivgroup.auriapp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyAwyTUJeXllau8XNe5t3CCwa4AwQrRemPc',
-    appId: '1:415033030230:ios:d56aaa86ea7fc89a70edf7',
+    appId: '1:415033030230:ios:6b498ba2465b16d370edf7',
     messagingSenderId: '415033030230',
     projectId: 'auri-app-77770',
     storageBucket: 'auri-app-77770.firebasestorage.app',
-    iosBundleId: 'com.example.auriApp',
+    iosBundleId: 'com.example.auriapp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyDrQY1844KgyHEw2lkGV4im5PXa96aL1TY',
-    appId: '1:415033030230:web:6bf7bc4d5e875a5e70edf7',
+    appId: '1:415033030230:web:e26617ab9329455f70edf7',
     messagingSenderId: '415033030230',
     projectId: 'auri-app-77770',
     authDomain: 'auri-app-77770.firebaseapp.com',
     storageBucket: 'auri-app-77770.firebasestorage.app',
-    measurementId: 'G-QVC47Y98XX',
+    measurementId: 'G-2EL79B4DVR',
   );
+
 }

@@ -1,7 +1,7 @@
 // Outfit Page
 import 'package:flutter/material.dart';
-import '../services/outfit_service.dart';
-import '../models/outfit_model.dart';
+import '../../services/outfit_service.dart';
+import '../../models/outfit_model.dart';
 
 class OutfitPage extends StatelessWidget {
   final double temperature;
