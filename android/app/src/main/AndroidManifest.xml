@@ -2,6 +2,7 @@
     package="com.ivgroup.auri_app">
 
     <!-- PERMISOS -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -9,14 +10,17 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Opcional pero recomendado -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:name="${applicationName}"
         android:label="Auri"
         android:icon="@mipmap/ic_launcher"
-        android:exported="true">
+        android:exported="true"
+        android:enableOnBackInvokedCallback="true">
 
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
@@ -77,11 +81,16 @@
 
     </application>
 
-    <!-- PERMITE TEXTO -->
+    <!-- QUERIES NECESARIOS -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
+        </intent>
+
+        <!-- Permite detectar apps que usan micrófono -->
+        <intent>
+            <action android:name="android.media.action.RECORD_SOUND" />
         </intent>
     </queries>
 

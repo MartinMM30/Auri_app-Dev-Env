@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+
 <plist version="1.0">
 <dict>
 
@@ -62,20 +63,34 @@
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
-    <!-- Permisos de ubicación (iOS exige esto) -->
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Auri necesita tu ubicación para detectar correctamente tu zona horaria y programar recordatorios precisos.</string>
+    <!-- ⬇⬇⬇ PERMISOS DE VOZ / MICRÓFONO / SPEECH ⬇⬇⬇ -->
 
-    <!-- Notificaciones push -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Auri necesita acceso al micrófono para escucharte y procesar comandos por voz.</string>
+
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Auri usa reconocimiento de voz para interpretar tus comandos y ayudarte mejor.</string>
+
+    <!-- Opcional pero recomendado para motores que usan audio -->
+    <key>NSAppleMusicUsageDescription</key>
+    <string>Permitir acceso al audio ayuda a mejorar la experiencia de voz.</string>
+
+    <!-- ⬆⬆⬆ FIN DE PERMISOS DE VOZ ⬆⬆⬆ -->
+
+    <!-- Ubicación -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Auri necesita tu ubicación para clima, zona horaria y recordatorios.</string>
+
+    <!-- Notificaciones -->
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>
     </array>
 
     <key>NSUserNotificationUsageDescription</key>
-    <string>Auri usa notificaciones para recordarte tus eventos importantes.</string>
+    <string>Auri usa notificaciones para recordatorios importantes.</string>
 
-    <!-- App Transport Security -->
+    <!-- Permite conexiones HTTP/HTTPS -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
@@ -84,6 +99,10 @@
 
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
+
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Auri necesita acceder al micrófono para escuchar tus comandos de voz.</string>
+
 
 </dict>
 </plist>

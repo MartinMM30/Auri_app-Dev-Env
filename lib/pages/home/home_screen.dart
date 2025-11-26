@@ -15,6 +15,9 @@ import 'package:auri_app/widgets/weather_display_glass.dart';
 import 'package:auri_app/widgets/outfit_recommendation_glass.dart';
 import 'package:auri_app/routes/app_routes.dart';
 import 'package:auri_app/services/slime_mood_engine.dart';
+//import 'package:auri_app/auri/mind/auri_mind_engine.dart';
+import 'package:auri_app/auri/voice/voice_session_controller.dart';
+import 'package:auri_app/widgets/siri_voice_button.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -148,6 +151,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+
+      // BOTÓN DE VOZ AGREGADO AQUÍ
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: SiriVoiceButton(),
+
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -442,6 +450,74 @@ class _ReminderGlassItem extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VoiceButton extends StatefulWidget {
+  @override
+  State<_VoiceButton> createState() => _VoiceButtonState();
+}
+
+class _VoiceButtonState extends State<_VoiceButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+
+    _pulse = Tween<double>(
+      begin: 0.9,
+      end: 1.15,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return ScaleTransition(
+      scale: _pulse,
+      child: GestureDetector(
+        onTap: () async {
+          // Aquí arrancará la sesión de voz
+          await VoiceSessionController.startVoiceSession();
+        },
+        child: Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                cs.primary.withOpacity(0.8),
+                cs.primary.withOpacity(0.35),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: cs.primary.withOpacity(0.6),
+                blurRadius: 30,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Icon(Icons.mic_rounded, color: Colors.white, size: 32),
         ),
       ),
     );

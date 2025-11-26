@@ -116,4 +116,12 @@ class SlimeMoodEngine {
       emoji: "💫",
     );
   }
+
+  // ---------------------------------------------
+  // Estados de voz (placeholder hasta usar Rive)
+  // ---------------------------------------------
+  static void setVoiceState(String state) {
+    print("🎙 Auri voice-state → $state");
+    // Aquí conectaremos Rive en el futuro
+  }
 }
