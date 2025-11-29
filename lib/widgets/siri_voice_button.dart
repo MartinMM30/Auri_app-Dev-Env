@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:auri_app/auri/voice/voice_session_controller.dart';
 import 'package:auri_app/auri/voice/stt_whisper_online.dart';
+import 'package:auri_app/services/realtime/auri_realtime.dart';
 
 class SiriVoiceButton extends StatefulWidget {
   @override
@@ -43,9 +44,10 @@ class _SiriVoiceButtonState extends State<SiriVoiceButton>
     final cs = Theme.of(context).colorScheme;
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         _tapCount++;
-        Future.delayed(const Duration(milliseconds: 250), () {
+        Future.delayed(const Duration(milliseconds: 250), () async {
+          await AuriRealtime.instance.connect(); // ← AQUÍ VA
           if (_tapCount >= 2) {
             VoiceSessionController.cancel();
           } else {
@@ -57,6 +59,8 @@ class _SiriVoiceButtonState extends State<SiriVoiceButton>
 
       onLongPressStart: (_) async {
         _isHeld = true;
+        await AuriRealtime.instance.ensureConnected();
+        // ← AQUÍ TAMBIÉN
         await VoiceSessionController.startRecording();
       },
 

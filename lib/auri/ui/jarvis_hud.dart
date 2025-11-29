@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:auri_app/services/realtime/auri_realtime.dart';
 
 class AuriJarvisHud extends StatefulWidget {
-  final String ip;
-
-  /// Callback opcional para enviar la energía de la boca (0–1) al HomeScreen
   final ValueChanged<double>? onLipSync;
 
-  const AuriJarvisHud({super.key, required this.ip, this.onLipSync});
+  const AuriJarvisHud({super.key, this.onLipSync});
 
   @override
   State<AuriJarvisHud> createState() => _AuriJarvisHudState();
@@ -24,9 +21,6 @@ class _AuriJarvisHudState extends State<AuriJarvisHud> {
 
     final rt = AuriRealtime.instance;
 
-    // ---------------------------------------
-    // PARTIAL → texto mientras piensa
-    // ---------------------------------------
     rt.addOnPartial((txt) {
       setState(() {
         _thinkingText = txt;
@@ -34,9 +28,6 @@ class _AuriJarvisHudState extends State<AuriJarvisHud> {
       });
     });
 
-    // ---------------------------------------
-    // THINKING → estado del cerebro
-    // ---------------------------------------
     rt.addOnThinking((state) {
       setState(() {
         _thinking = state;
@@ -44,9 +35,6 @@ class _AuriJarvisHudState extends State<AuriJarvisHud> {
       });
     });
 
-    // ---------------------------------------
-    // LIP SYNC → energía de la boca
-    // ---------------------------------------
     rt.addOnLip((e) {
       setState(() => _energy = e);
       widget.onLipSync?.call(e);
@@ -95,8 +83,6 @@ class _AuriJarvisHudState extends State<AuriJarvisHud> {
                   ),
                 ),
                 const Spacer(),
-
-                // Energía de voz
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 120),
                   width: 52,

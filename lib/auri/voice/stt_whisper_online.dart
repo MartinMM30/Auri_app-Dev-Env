@@ -47,25 +47,20 @@ class STTWhisperOnline {
     print("🎙 Auri voice-state → listening");
     print("🎤 startRecorder() — streaming a WS");
 
-    // Cancelar antiguo stream de amplitud, por si acaso
     await _ampStream?.cancel();
     _ampStream = null;
 
-    // 🔹 1) Avisar al backend que empieza una sesión de audio
-    AuriRealtime.instance.startSession();
-
-    // 🔹 2) Empezar grabación en PCM16 y mandar a WS
+    // 🔹 CORRECTO
+    AuriRealtime.instance.startVoiceSession();
     await _rec.startRecorder(
       codec: Codec.pcm16,
       numChannels: 1,
       sampleRate: 16000,
+      bufferSize: 2048, // ← requerido
       toStream: AuriRealtime.instance.micSink,
     );
 
-    // 🔹 3) Escuchar amplitud en tiempo real
     _ampStream = _rec.onProgress!.listen((event) {
-      print("🎧 onProgress dB=${event.decibels}");
-
       if (event.decibels != null) {
         double norm = ((event.decibels! + 60) / 60).clamp(0.0, 1.0);
         _lastAmp = norm;
@@ -74,7 +69,6 @@ class STTWhisperOnline {
     });
   }
 
-  // ------------------------------------------------------------
   Future<void> stopRecording() async {
     if (!_recording) return;
     _recording = false;
@@ -87,7 +81,10 @@ class STTWhisperOnline {
 
     amplitude.value = 0.0;
 
-    // Señal de FIN al backend
+    // 🔹 Señal de FIN
     AuriRealtime.instance.endAudio();
+
+    // 🔹 Señal de cerrar sesión
+    AuriRealtime.instance.stopVoiceSession();
   }
 }

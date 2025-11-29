@@ -3,17 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:auri_app/auri/voice/auri_tts.dart';
-
-/// ----------------------------------------------------------------
-///  A U R I   R E A L T I M E   —   V4
-/// ----------------------------------------------------------------
-///  - PCM → STT final
-///  - TTS vía FlutterTTS (temporal)
-///  - Eventos: partial, final, thinking, lip-sync, acciones
-///  - Reconexión automática
-///  - Manejo de sesiones: start / stop / audio_end
-/// ----------------------------------------------------------------
+import 'package:auri_app/auri/voice/tts_player_pcm.dart';
 
 class AuriRealtime {
   static final AuriRealtime instance = AuriRealtime._();
@@ -21,22 +11,16 @@ class AuriRealtime {
 
   WebSocketChannel? _ch;
   bool _connected = false;
-  bool get connected => _connected;
+  bool _connecting = false;
 
-  String _ip = "";
   Timer? _retryTimer;
+  Timer? _heartbeatTimer;
 
-  // ------------------------------------------------------------
-  // STREAM PCM → WS
-  // ------------------------------------------------------------
   final StreamController<Uint8List> _micStream =
       StreamController<Uint8List>.broadcast();
 
   StreamSink<Uint8List> get micSink => _micStream.sink;
 
-  // ------------------------------------------------------------
-  // EVENTOS — listeners múltiples
-  // ------------------------------------------------------------
   final List<void Function(String)> _onPartial = [];
   final List<void Function(String)> _onFinal = [];
   final List<void Function(bool)> _onThinking = [];
@@ -49,149 +33,138 @@ class AuriRealtime {
   void addOnThinking(void Function(bool) f) => _onThinking.add(f);
   void addOnLip(void Function(double) f) => _onLip.add(f);
   void addOnAction(void Function(Map<String, dynamic>) f) => _onAction.add(f);
-  void addOnAudio(void Function(Uint8List) f) => _onAudio.add(f);
 
-  // ------------------------------------------------------------
-  // CONEXIÓN
-  // ------------------------------------------------------------
-  Future<void> connect(String ip) async {
-    if (_connected) return;
-    _ip = ip;
+  Future<void> ensureConnected() async {
+    if (_connected || _connecting) return;
+    return connect();
+  }
 
-    final url = "ws://$ip:8000/realtime";
-    print("🔌 Conectando WS → $url");
+  Future<void> connect() async {
+    if (_connected || _connecting) return;
+
+    const url = "wss://auri-backend-whisper.onrender.com/realtime";
+    print("🔌 Conectando → $url");
+
+    _connecting = true;
 
     try {
       _ch = WebSocketChannel.connect(Uri.parse(url));
       _connected = true;
-      _retryTimer?.cancel();
+      _connecting = false;
 
       print("🟢 WS conectado");
 
       _sendJsonSafe({
         "type": "client_hello",
         "client": "auri_app",
-        "version": "0.2.0",
+        "version": "1.0.0-v4",
       });
 
-      // AUDIO saliente
-      _micStream.stream.listen((pcmBytes) {
+      _micStream.stream.listen((bytes) {
         try {
-          _ch?.sink.add(pcmBytes);
-        } catch (e) {
-          print("❌ Error enviando PCM: $e");
-        }
+          _ch?.sink.add(bytes);
+        } catch (_) {}
       });
 
-      // MANEJO DE RESPUESTAS
+      _heartbeatTimer?.cancel();
+      _heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+        _sendJsonSafe({"type": "ping"});
+      });
+
       _ch!.stream.listen(
         (data) {
+          // AUDIO PCM16 DEL BACKEND
           if (data is Uint8List) {
-            // (A futuro) audio de TTS real-time
-            for (var cb in _onAudio) cb(data);
+            TtsPlayerPCM.instance.feed(data); // ← TTS en vivo
             return;
           }
           _handleMessage(data);
+        },
+        onDone: () {
+          print("🔌 WS cerrado");
+          _connected = false;
+          _scheduleReconnect();
         },
         onError: (err) {
           print("❌ WS error: $err");
           _connected = false;
           _scheduleReconnect();
         },
-        onDone: () {
-          print("🔌 WS desconectado");
-          _connected = false;
-          _scheduleReconnect();
-        },
       );
     } catch (e) {
-      print("❌ No se pudo conectar: $e");
+      print("❌ Falló conexión WS: $e");
       _connected = false;
+      _connecting = false;
       _scheduleReconnect();
     }
-  }
-
-  Future<void> ensureConnected(String ip) async {
-    if (_connected) return;
-    await connect(ip);
   }
 
   void _scheduleReconnect() {
     if (_retryTimer != null) return;
 
     _retryTimer = Timer(const Duration(seconds: 3), () {
-      print("🔄 Reintentando conexión WS…");
+      print("🔄 Reintentando conexión…");
       _retryTimer = null;
-      connect(_ip);
+      connect();
     });
   }
 
-  // ------------------------------------------------------------
-  // ENVÍO JSON SEGURO
-  // ------------------------------------------------------------
   void _sendJsonSafe(Map<String, dynamic> payload) {
     if (!_connected) return;
     try {
       _ch?.sink.add(jsonEncode(payload));
-    } catch (e) {
-      print("❌ Error enviando JSON: $e");
-    }
+    } catch (_) {}
   }
 
-  // ------------------------------------------------------------
-  // SESIONES DE VOZ
-  // ------------------------------------------------------------
-  void startSession() => _sendJsonSafe({"type": "start_session"});
+  void startVoiceSession() {
+    _sendJsonSafe({"type": "start_session"});
+  }
 
-  void stopSession() => _sendJsonSafe({"type": "stop_session"});
+  void stopVoiceSession() {
+    _sendJsonSafe({"type": "stop_session"});
+  }
 
-  void endAudio() => _sendJsonSafe({"type": "audio_end"});
+  void endAudio() {
+    _sendJsonSafe({"type": "audio_end"});
+  }
 
-  void sendText(String text) =>
-      _sendJsonSafe({"type": "text_command", "text": text});
+  void sendText(String text) {
+    _sendJsonSafe({"type": "text_command", "text": text});
+  }
 
-  // ------------------------------------------------------------
-  // MANEJO DE MENSAJES
-  // ------------------------------------------------------------
   void _handleMessage(dynamic data) {
-    late final Map<String, dynamic> msg;
+    Map<String, dynamic> msg;
 
     try {
       msg = Map<String, dynamic>.from(jsonDecode(data));
-    } catch (e) {
-      print("⚠ Mensaje no JSON: $data");
+    } catch (_) {
+      print("⚠ No es JSON: $data");
       return;
     }
 
-    final type = msg["type"];
-
-    switch (type) {
+    switch (msg["type"]) {
       case "stt_partial":
       case "reply_partial":
-        for (var cb in _onPartial) cb(msg["text"] ?? "");
+        for (final f in _onPartial) f(msg["text"] ?? "");
         break;
 
       case "stt_final":
-        for (var cb in _onFinal) cb(msg["text"] ?? "");
-        break;
-
       case "reply_final":
-        final text = msg["text"] ?? "";
-        for (var cb in _onFinal) cb(text);
-        AuriTTS.instance.speak(text); // 🔊 HABLAR AQUI
+        for (final f in _onFinal) f(msg["text"] ?? "");
         break;
 
       case "thinking":
-        for (var cb in _onThinking) cb(msg["state"] == true);
+        for (final f in _onThinking) f(msg["state"] == true);
         break;
 
       case "lip_sync":
-        final e = (msg["energy"] ?? 0.0).toDouble();
-        for (var cb in _onLip) cb(e);
+        final e = (msg["energy"] ?? 0).toDouble();
+        for (final f in _onLip) f(e);
         break;
 
+      case "action":
       case "action_create_reminder":
-        for (var cb in _onAction) cb(msg);
+        for (final f in _onAction) f(msg);
         break;
 
       default:
@@ -199,12 +172,10 @@ class AuriRealtime {
     }
   }
 
-  // ------------------------------------------------------------
-  // CERRAR
-  // ------------------------------------------------------------
   Future<void> close() async {
-    await _micStream.close();
     await _ch?.sink.close();
+    await _micStream.close();
     _connected = false;
+    _heartbeatTimer?.cancel();
   }
 }

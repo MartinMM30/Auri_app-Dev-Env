@@ -14,8 +14,6 @@ import 'package:auri_app/widgets/auth_gate.dart';
 import 'package:auri_app/config/timezone_setup.dart';
 import 'package:auri_app/services/notification_service.dart';
 
-import 'package:auri_app/auri/voice/auri_tts.dart'; // 👈 TTS
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -36,7 +34,6 @@ Future<void> main() async {
   final isSurveyCompleted = await AppInitializer().init();
 
   // 🔊 Inicializar TTS
-  await AuriTTS.instance.init();
 
   runApp(AuriApp(isSurveyCompleted: isSurveyCompleted));
 }
