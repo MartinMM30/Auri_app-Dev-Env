@@ -1,11 +1,18 @@
-import 'package:auri_app/services/slime_mood_engine.dart';
-
 class SlimeVoiceStates {
-  static void listening() => SlimeMoodEngine.setVoiceState("listening");
+  static void idle() {
+    print("😴 Slime → idle");
+    // Aquí va tu Rive input o placeholder
+  }
 
-  static void thinking() => SlimeMoodEngine.setVoiceState("thinking");
+  static void listening() {
+    print("👂 Slime → listening");
+  }
 
-  static void talking() => SlimeMoodEngine.setVoiceState("talking");
+  static void thinking() {
+    print("🧠 Slime → thinking");
+  }
 
-  static void idle() => SlimeMoodEngine.setVoiceState("idle");
+  static void talking() {
+    print("🗣 Slime → talking");
+  }
 }

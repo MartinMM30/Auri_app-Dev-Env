@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
+
 import 'package:auri_app/services/realtime/auri_realtime.dart';
 
 class STTWhisperOnline {
@@ -9,82 +11,90 @@ class STTWhisperOnline {
   static final STTWhisperOnline instance = STTWhisperOnline._();
 
   final FlutterSoundRecorder _rec = FlutterSoundRecorder();
-
   bool _ready = false;
   bool _recording = false;
 
-  StreamSubscription? _ampStream;
-
-  // 🔥 Amplitud
-  double _lastAmp = 0.0;
-  double get lastAmplitude => _lastAmp;
+  StreamSubscription<RecordingDisposition>? _pcmTap;
 
   final ValueNotifier<double> amplitude = ValueNotifier(0.0);
+  double lastAmplitude = 0.0;
 
-  // ------------------------------------------------------------
+  // ---------------------------------------------------
   Future<void> init() async {
     if (_ready) return;
 
-    final mic = await Permission.microphone.request();
-    if (!mic.isGranted) throw Exception("Micrófono denegado.");
+    final perm = await Permission.microphone.request();
+    if (!perm.isGranted) throw Exception("Micrófono denegado.");
 
     await _rec.openRecorder();
-    await _rec.setSubscriptionDuration(const Duration(milliseconds: 90));
+    await _rec.setSubscriptionDuration(const Duration(milliseconds: 40));
 
     _ready = true;
   }
 
-  // ------------------------------------------------------------
-  // ------------------------------------------------------------
+  // ---------------------------------------------------
   Future<void> startRecording() async {
     await init();
     if (_recording) return;
 
+    await AuriRealtime.instance.ensureConnected();
+    AuriRealtime.instance.startSession();
+
+    print("🎤 Auri escuchando…");
+
     _recording = true;
-    _lastAmp = 0.0;
-    amplitude.value = 0.0;
+    amplitude.value = 0;
 
-    print("🎙 Auri voice-state → listening");
-    print("🎤 startRecorder() — streaming a WS");
+    // Limpia taps previos
+    await _pcmTap?.cancel();
 
-    await _ampStream?.cancel();
-    _ampStream = null;
-
-    // 🔹 CORRECTO
-    AuriRealtime.instance.startVoiceSession();
-    await _rec.startRecorder(
-      codec: Codec.pcm16,
-      numChannels: 1,
-      sampleRate: 16000,
-      bufferSize: 2048, // ← requerido
-      toStream: AuriRealtime.instance.micSink,
-    );
-
-    _ampStream = _rec.onProgress!.listen((event) {
+    // ===================================================
+    // TAP DE AMPLITUD: decibeles o fallback simulado
+    // ===================================================
+    _pcmTap = _rec.onProgress!.listen((event) {
       if (event.decibels != null) {
-        double norm = ((event.decibels! + 60) / 60).clamp(0.0, 1.0);
-        _lastAmp = norm;
-        amplitude.value = norm;
+        // Normalizar decibeles
+        final db = event.decibels!;
+        final amp = ((db + 60) / 60).clamp(0.0, 1.0);
+
+        lastAmplitude = amp;
+        amplitude.value = amp;
+      } else {
+        // Fallback HONOR/HUAWEI: sin decibeles
+        // Le damos una amplitud muy pequeña, no 0
+        final amp = 0.02 + Random().nextDouble() * 0.03;
+
+        lastAmplitude = amp;
+        amplitude.value = amp;
       }
     });
+
+    // ===================================================
+    // ENVÍO DE PCM16 AL WEBSOCKET
+    // ===================================================
+    await _rec.startRecorder(
+      codec: Codec.pcm16,
+      sampleRate: 16000,
+      numChannels: 1,
+      bufferSize: 2048,
+      toStream: AuriRealtime.instance.micSink,
+    );
   }
 
+  // ---------------------------------------------------
   Future<void> stopRecording() async {
     if (!_recording) return;
-    _recording = false;
 
-    print("🛑 stopRecorder() — end WS");
+    _recording = false;
+    print("🛑 Auri dejó de escuchar");
 
     await _rec.stopRecorder();
-    await _ampStream?.cancel();
-    _ampStream = null;
+    await _pcmTap?.cancel();
+    _pcmTap = null;
 
-    amplitude.value = 0.0;
+    amplitude.value = 0;
+    lastAmplitude = 0;
 
-    // 🔹 Señal de FIN
     AuriRealtime.instance.endAudio();
-
-    // 🔹 Señal de cerrar sesión
-    AuriRealtime.instance.stopVoiceSession();
   }
 }

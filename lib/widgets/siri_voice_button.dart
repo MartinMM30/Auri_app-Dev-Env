@@ -47,7 +47,6 @@ class _SiriVoiceButtonState extends State<SiriVoiceButton>
       onTap: () async {
         _tapCount++;
         Future.delayed(const Duration(milliseconds: 250), () async {
-          await AuriRealtime.instance.connect(); // ← AQUÍ VA
           if (_tapCount >= 2) {
             VoiceSessionController.cancel();
           } else {
@@ -59,8 +58,6 @@ class _SiriVoiceButtonState extends State<SiriVoiceButton>
 
       onLongPressStart: (_) async {
         _isHeld = true;
-        await AuriRealtime.instance.ensureConnected();
-        // ← AQUÍ TAMBIÉN
         await VoiceSessionController.startRecording();
       },
 

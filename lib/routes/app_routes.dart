@@ -14,6 +14,7 @@ class AppRoutes {
   static const surveyEdit = '/survey/edit';
   static const reminders = '/reminders';
   static const outfitPage = '/outfit';
+  static const weatherPage = "/weather";
 
   static Map<String, WidgetBuilder> routes = {
     welcome: (_) => const WelcomeScreen(),

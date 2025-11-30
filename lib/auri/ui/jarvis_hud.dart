@@ -21,6 +21,9 @@ class _AuriJarvisHudState extends State<AuriJarvisHud> {
 
     final rt = AuriRealtime.instance;
 
+    // ---------------------------------------
+    // PARTIAL → texto mientras piensa
+    // ---------------------------------------
     rt.addOnPartial((txt) {
       setState(() {
         _thinkingText = txt;
@@ -28,6 +31,9 @@ class _AuriJarvisHudState extends State<AuriJarvisHud> {
       });
     });
 
+    // ---------------------------------------
+    // THINKING → estado del cerebro
+    // ---------------------------------------
     rt.addOnThinking((state) {
       setState(() {
         _thinking = state;
@@ -35,6 +41,9 @@ class _AuriJarvisHudState extends State<AuriJarvisHud> {
       });
     });
 
+    // ---------------------------------------
+    // LIP SYNC → energía de la boca
+    // ---------------------------------------
     rt.addOnLip((e) {
       setState(() => _energy = e);
       widget.onLipSync?.call(e);
@@ -83,6 +92,8 @@ class _AuriJarvisHudState extends State<AuriJarvisHud> {
                   ),
                 ),
                 const Spacer(),
+
+                // Energía de voz
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 120),
                   width: 52,

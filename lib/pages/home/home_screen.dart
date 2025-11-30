@@ -53,9 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final rt = AuriRealtime.instance;
 
-    // ----------------------------------------------
-    //  LISTENERS DE JARVIS
-    // ----------------------------------------------
+    // --------------------------------------------------------------
+    // JARVIS TEXT EVENTS
+    // --------------------------------------------------------------
     rt.addOnPartial((txt) {
       setState(() => _thinkingText = txt);
     });
@@ -64,17 +64,28 @@ class _HomeScreenState extends State<HomeScreen> {
       print("💬 Respuesta final: $txt");
     });
 
+    // STATES: thinking / idle
     rt.addOnThinking((isThinking) {
       SlimeMoodEngine.setVoiceState(isThinking ? "thinking" : "idle");
       if (!isThinking) setState(() => _thinkingText = "");
     });
 
+    // --------------------------------------------------------------
+    // 🔊 LIP SYNC — mover boca del slime
+    // --------------------------------------------------------------
     rt.addOnLip((energy) {
       setState(() => _slimeMouthEnergy = energy);
     });
 
+    // --------------------------------------------------------------
+    // 🎬 ACTIONS — comandos especiales del backend
+    // --------------------------------------------------------------
     rt.addOnAction((data) {
-      print("📌 Acción recibida: $data");
+      print("⚡ Acción recibida: $data");
+      // ejemplo:
+      if (data["action"] == "open_weather") {
+        Navigator.pushNamed(context, AppRoutes.weatherPage);
+      }
     });
 
     // ----------------------------------------------

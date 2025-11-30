@@ -47,3 +47,5 @@ app.*.map.json
 
 # Secret API keys
 lib/config.dart
+
+assets/
